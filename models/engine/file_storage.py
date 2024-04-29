@@ -24,6 +24,8 @@ class FileStorage:
     # dictionary - empty but will store all objects by <class name>.id
     __objects = {}
 
+    is_closed = False
+
     def all(self, cls=None):
         """returns the dictionary __objects"""
         if cls is not None:
@@ -52,10 +54,15 @@ class FileStorage:
         """deserializes the JSON file to __objects"""
         try:
             with open(self.__file_path, 'r') as f:
-                jo = json.load(f)
-            for key in jo:
-                self.__objects[key] = classes[jo[key]["__class__"]](**jo[key])
-        except:
+                try:
+                    jo = json.load(f)
+                    for key in jo:
+                        self.__objects[key] = classes[
+                                jo[key]["__class__"]
+                                ](**jo[key])
+                except json.JSONDecodeError:
+                    pass
+        except (FileExistsError, FileNotFoundError):
             pass
 
     def delete(self, obj=None):
@@ -68,3 +75,25 @@ class FileStorage:
     def close(self):
         """call reload() method for deserializing the JSON file to objects"""
         self.reload()
+        self.is_closed = True
+
+    def get(self, cls, id):
+        """ A method to retrieve one object
+            cls: class passed
+            id: string representing the object ID
+            Return: object based on the class
+        """
+        all_class = self.all(cls)
+
+        for obj in all_class.values():
+            if id == str(obj.id):
+                return obj
+
+        return None
+
+    def count(self, cls=None):
+        """ count the number of objects in storage
+        cls: class passed
+        Return: the number of objects in storage matching the given class.
+        """
+        return len(self.all(cls))

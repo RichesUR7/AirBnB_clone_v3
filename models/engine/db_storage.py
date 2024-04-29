@@ -40,6 +40,8 @@ class DBStorage:
         if HBNB_ENV == "test":
             Base.metadata.drop_all(self.__engine)
 
+        self.is_closed = False
+
     def all(self, cls=None):
         """query on the current database session"""
         new_dict = {}
@@ -73,4 +75,34 @@ class DBStorage:
 
     def close(self):
         """call remove() method on the private session attribute"""
+        self.__session.rollback()
+        self.__session.close()
         self.__session.remove()
+        self.is_closed = True
+
+    def get(self, cls, id):
+        """Get One Object"""
+        obj = None
+        if cls is not None and issubclass(cls, BaseModel):
+            obj = self.__session.query(cls).filter(cls.id == id).first()
+        return obj
+
+    def count(self, cls=None):
+        """Returns the number of objects in storage matching the given class"""
+        if cls is None:
+            total = 0
+            for cls in classes.values():
+                total += len(self.all(cls))
+            return total
+        elif cls not in classes.values():
+            return 0
+        else:
+            return len(self.all(cls))
+
+    def close_session(self):
+        """Close the current database session"""
+        self.__session.close()
+
+    def rollback(self):
+        """Roll back the current database session"""
+        self.__session.rollback()

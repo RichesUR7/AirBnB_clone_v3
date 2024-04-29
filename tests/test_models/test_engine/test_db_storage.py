@@ -6,9 +6,10 @@ Contains the TestDBStorageDocs and TestDBStorage classes
 from datetime import datetime
 import inspect
 import models
+import sqlalchemy
 from models.engine import db_storage
 from models.amenity import Amenity
-from models.base_model import BaseModel
+from models.base_model import BaseModel, Base
 from models.city import City
 from models.place import Place
 from models.review import Review
@@ -18,6 +19,7 @@ import json
 import os
 import pep8
 import unittest
+from models import storage
 DBStorage = db_storage.DBStorage
 classes = {"Amenity": Amenity, "City": City, "Place": Place,
            "Review": Review, "State": State, "User": User}
@@ -68,7 +70,32 @@ test_db_storage.py'])
                             "{:s} method needs a docstring".format(func[0]))
 
 
-class TestFileStorage(unittest.TestCase):
+@unittest.skipIf(models.storage_t != 'db', "not testing db storage")
+class TestDBStorage(unittest.TestCase):
+    """Test the DBStorage class"""
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up for the tests"""
+        cls.state = State(name="San Fransico")
+        cls.city = City(name="Mexico", state_id=cls.state.id)
+        storage.new(cls.state)
+        storage.new(cls.city)
+        storage.save()
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up after tests"""
+        storage._DBStorage__session.expunge_all()
+        storage.delete(cls.city)
+        storage.delete(cls.state)
+        storage.save()
+
+    def setUp(self):
+        """Refresh objects before each test"""
+        self.state = storage._DBStorage__session.merge(self.state)
+        self.city = storage._DBStorage__session.merge(self.city)
+
     """Test the FileStorage class"""
     @unittest.skipIf(models.storage_t != 'db', "not testing db storage")
     def test_all_returns_dict(self):
@@ -86,3 +113,53 @@ class TestFileStorage(unittest.TestCase):
     @unittest.skipIf(models.storage_t != 'db', "not testing db storage")
     def test_save(self):
         """Test that save properly saves objects to file.json"""
+
+    def test_get(self):
+        """Test the get method"""
+        retrieved_state = storage.get(State, self.state.id)
+        self.assertEqual(retrieved_state, self.state)
+
+    def test_count(self):
+        """Test the count method"""
+        self.assertEqual(storage.count(State), 1)
+        self.assertEqual(storage.count(City), 1)
+
+    def test_all_with_class(self):
+        """Test the all method with class name argument"""
+        states = storage.all(State)
+        self.assertIn(self.state, states.values())
+
+    def test_all_without_class(self):
+        """Test the all method without class name argument"""
+        objects = storage.all()
+        self.assertIn(self.state, objects.values())
+        self.assertIn(self.city, objects.values())
+
+    def test_new(self):
+        """Test the new method"""
+        new_state = State(name="New State")
+        storage.new(new_state)
+        self.assertIn(new_state, storage.all(State).values())
+
+    def test_delete(self):
+        """Test the delete method"""
+        new_state = State(name="Temporary State")
+        storage.new(new_state)
+        storage.save()
+        storage.delete(new_state)
+        self.assertNotIn(new_state, storage.all(State).values())
+
+    def test_reload(self):
+        """Test the reload method"""
+        storage.reload()
+        self.state = storage._DBStorage__session.merge(self.state)
+        self.assertIn(self.state, storage.all(State).values())
+
+    def test_close(self):
+        """Test the close method"""
+        storage.close()
+        self.assertNotIn(self.state, storage._DBStorage__session)
+
+
+if __name__ == "__main__":
+    unittest.main()
